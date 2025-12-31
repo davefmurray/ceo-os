@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Sun,
@@ -14,8 +15,13 @@ import {
   Brain,
   MessageSquare,
   Settings,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -37,6 +43,33 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Get initial user
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    setLoading(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-card">
@@ -72,6 +105,35 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* User section */}
+      {user && (
+        <div className="border-t p-3">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate">
+                {user.user_metadata?.full_name || 'User'}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user.email}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start mt-1"
+            onClick={handleSignOut}
+            disabled={loading}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign out
+          </Button>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="border-t p-4">
